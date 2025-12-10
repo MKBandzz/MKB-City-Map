@@ -1,0 +1,135 @@
+<script>
+// === 1️⃣ Map setup ===
+var mapWidth = 14208;
+var mapHeight = 14336;
+var bounds = [[0,0], [mapHeight, mapWidth]];
+
+var map = L.map('map', {
+    crs: L.CRS.Simple,
+    minZoom: 0,
+    maxZoom: 3,
+    center: [mapHeight/2, mapWidth/2],
+    zoom: 0
+});
+map.fitBounds(bounds);
+
+// === 2️⃣ Coordinate conversion (QGIS → Leaflet) ===
+function qgisToLeaflet(x, y){
+    return [mapHeight - y, x]; // invert Y
+}
+
+// === 3️⃣ Load tiles dynamically ===
+fetch('tiles_lookup.json')
+.then(response => response.json())
+.then(tilesLookup => {
+
+    function tileUrl(coords) {
+        var z = coords.z;
+        var xIndex = coords.x;
+        var yIndex = coords.y;
+
+        var xFolders = Object.keys(tilesLookup[z]);
+        if(xIndex < 0 || xIndex >= xFolders.length) return '';
+        var xFolder = xFolders[xIndex];
+
+        var yFolders = tilesLookup[z][xFolder];
+        if(!yFolders) return '';
+        if(yIndex < 0 || yIndex >= yFolders.length) return '';
+        var yFolder = yFolders[yIndex];
+
+        return 'tiles/zoom.'+z+'/'+xFolder+'/'+yFolder+'/tile.0.0.png';
+    }
+
+    L.tileLayer('', {
+        tileSize: 256,
+        maxZoom: 3,
+        minZoom: 0,
+        noWrap: true,
+        bounds: bounds,
+        getTileUrl: tileUrl
+    }).addTo(map);
+
+    // === 4️⃣ Load roads and build routing graph ===
+    var roadLayer = L.layerGroup().addTo(map);
+    var routingGraph = []; // Each entry: {coords, speed, level, path, name, type}
+
+    fetch('roads.geojson')
+    .then(res => res.json())
+    .then(data => {
+        data.features.forEach(feature => {
+            var props = feature.properties;
+
+            // Skip Walkways
+            if(props.Type === 'Walkway') return;
+
+            var coords = feature.geometry.coordinates.map(c => qgisToLeaflet(c[0], c[1]));
+            var speed = props.Speed || 60;
+
+            // Add to routing graph
+            routingGraph.push({
+                coords: coords,
+                speed: speed,
+                level: props.Level,
+                path: props.Path,
+                name: props.Name,
+                type: props.Type
+            });
+
+            // Draw the road
+            L.polyline(coords, {color:'blue', weight:2})
+             .bindPopup(`<b>${props.Name}</b><br>Type: ${props.Type}<br>Level: ${props.Level}<br>Path: ${props.Path}<br>Speed: ${speed}`)
+             .addTo(roadLayer);
+        });
+
+        console.log("Routing graph ready:", routingGraph);
+    });
+
+    // === 5️⃣ Utility: Euclidean distance ===
+    function distance(p1, p2){
+        var dx = p1[1] - p2[1]; // x
+        var dy = p1[0] - p2[0]; // y
+        return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    // === 6️⃣ Find nearest valid road ===
+    function findNearestRoad(coord){
+        var candidates = routingGraph.filter(r => 
+            ['Street','Arterial','Road','Highway'].includes(r.type)
+        );
+
+        // Prioritize Street/Arterial/Road
+        var primary = candidates.filter(r => ['Street','Arterial','Road'].includes(r.type));
+        if(primary.length) candidates = primary;
+
+        var nearest = null;
+        var minDist = Infinity;
+
+        candidates.forEach(r => {
+            r.coords.forEach(c => {
+                var d = distance(coord, c);
+                if(d < minDist){
+                    minDist = d;
+                    nearest = r;
+                }
+            });
+        });
+
+        return nearest;
+    }
+
+    // === 7️⃣ Click-to-route ===
+    var routeLayer = L.layerGroup().addTo(map);
+
+    map.on('click', function(e){
+        routeLayer.clearLayers();
+        var clicked = [e.latlng.lat, e.latlng.lng];
+        var nearestRoad = findNearestRoad(clicked);
+
+        if(nearestRoad){
+            L.polyline(nearestRoad.coords, {color:'orange', weight:4})
+             .addTo(routeLayer);
+        }
+    });
+
+});
+</script>
