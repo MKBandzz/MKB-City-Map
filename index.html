@@ -4,10 +4,8 @@
 <meta charset="utf-8" />
 <title>MKB City Map</title>
 
-<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-<!-- Leaflet JS (defer so it loads before our inline script executes) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
 <style>
@@ -38,7 +36,11 @@ window.onload = function() {
   // --------------------------
   const MIN_ZOOM = 0;
   const MAX_ZOOM = 3;
-  const MAP_WIDTH = 14208;   // your tif width (kept from earlier)
+  // CRITICAL FIX: Base path for GitHub Pages Project
+  // This must match your repository name
+  const REPO_NAME = '/mkbcity'; 
+  
+  const MAP_WIDTH = 14208;   // your tif width
   const MAP_HEIGHT = 14336;  // your tif height
   const bounds = [[0,0],[MAP_HEIGHT, MAP_WIDTH]];
 
@@ -60,7 +62,8 @@ window.onload = function() {
   // --------------------------
   // Load tiles_lookup.json and install the Unmined-compatible tile layer
   // --------------------------
-  fetch('tiles_lookup.json')
+  // CRITICAL FIX: Prepend REPO_NAME to the fetch path for tiles_lookup.json
+  fetch(REPO_NAME + '/tiles_lookup.json')
   .then(r => {
     if(!r.ok) throw new Error('tiles_lookup.json fetch failed: ' + r.status);
     return r.json();
@@ -81,7 +84,7 @@ window.onload = function() {
     }
 
     // UnminedTileLayer: computes tile path like:
-    // tiles/zoom.{z}/{regionX}/{regionZ}/tile.{tileX}.{tileY}.png
+    // /mkbcity/tiles/zoom.{z}/{regionX}/{regionZ}/tile.{tileX}.{tileY}.png
     const UnminedTileLayer = L.TileLayer.extend({
       getTileUrl: function(coords) {
         const z = coords.z;
@@ -98,8 +101,8 @@ window.onload = function() {
           return undefined;
         }
 
-        // Build URL
-        const url = 'tiles/zoom.' + z + '/' + regionX + '/' + regionZ + '/tile.' + tileX + '.' + tileY + '.png';
+        // Build URL - MODIFIED to include REPO_NAME
+        const url = REPO_NAME + '/tiles/zoom.' + z + '/' + regionX + '/' + regionZ + '/tile.' + tileX + '.' + tileY + '.png';
         // console.log('Tile URL', url);
         return url;
       }
@@ -121,7 +124,8 @@ window.onload = function() {
     const roadLayer = L.layerGroup().addTo(map);
     const routingGraph = []; // { coords: [[lat,lng],...], speed, level, path, name, type }
 
-    fetch('roads.geojson')
+    // CRITICAL FIX: Prepend REPO_NAME to the fetch path for roads.geojson
+    fetch(REPO_NAME + '/roads.geojson')
     .then(r => {
       if(!r.ok) throw new Error('roads.geojson fetch failed: ' + r.status);
       return r.json();
@@ -190,7 +194,8 @@ window.onload = function() {
       return [ sx / ring.length, sy / ring.length ];
     }
 
-    fetch('properties.geojson')
+    // CRITICAL FIX: Prepend REPO_NAME to the fetch path for properties.geojson
+    fetch(REPO_NAME + '/properties.geojson')
     .then(r => {
       if(!r.ok) throw new Error('properties.geojson fetch failed: ' + r.status);
       return r.json();
