@@ -1,5 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MKB City Map</title>
+
+<!-- Leaflet CSS -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+
+  #map {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+</head>
+
+<body>
+
+<!-- MAP CONTAINER (required by Leaflet) -->
+<div id="map"></div>
+
 <script>
-// === 1️⃣ Map setup ===
+// 1. Map setup
 var mapWidth = 14208;
 var mapHeight = 14336;
 var bounds = [[0,0], [mapHeight, mapWidth]];
@@ -13,12 +49,12 @@ var map = L.map('map', {
 });
 map.fitBounds(bounds);
 
-// === 2️⃣ Coordinate conversion (QGIS → Leaflet) ===
+// 2. Coordinate conversion from QGIS → Leaflet
 function qgisToLeaflet(x, y){
     return [mapHeight - y, x]; // invert Y
 }
 
-// === 3️⃣ Load tiles dynamically ===
+// 3. Load tile lookup to dynamically pick tile folders
 fetch('tiles_lookup.json')
 .then(response => response.json())
 .then(tilesLookup => {
@@ -29,15 +65,15 @@ fetch('tiles_lookup.json')
         var yIndex = coords.y;
 
         var xFolders = Object.keys(tilesLookup[z]);
-        if(xIndex < 0 || xIndex >= xFolders.length) return '';
+        if (xIndex < 0 || xIndex >= xFolders.length) return '';
         var xFolder = xFolders[xIndex];
 
         var yFolders = tilesLookup[z][xFolder];
-        if(!yFolders) return '';
-        if(yIndex < 0 || yIndex >= yFolders.length) return '';
+        if (!yFolders) return '';
+        if (yIndex < 0 || yIndex >= yFolders.length) return '';
         var yFolder = yFolders[yIndex];
 
-        return 'tiles/zoom.'+z+'/'+xFolder+'/'+yFolder+'/tile.0.0.png';
+        return 'tiles/zoom.' + z + '/' + xFolder + '/' + yFolder + '/tile.0.0.png';
     }
 
     L.tileLayer('', {
@@ -49,9 +85,9 @@ fetch('tiles_lookup.json')
         getTileUrl: tileUrl
     }).addTo(map);
 
-    // === 4️⃣ Load roads and build routing graph ===
+    // 4. Load roads and build routing graph
     var roadLayer = L.layerGroup().addTo(map);
-    var routingGraph = []; // Each entry: {coords, speed, level, path, name, type}
+    var routingGraph = [];
 
     fetch('roads.geojson')
     .then(res => res.json())
@@ -59,13 +95,11 @@ fetch('tiles_lookup.json')
         data.features.forEach(feature => {
             var props = feature.properties;
 
-            // Skip Walkways
-            if(props.Type === 'Walkway') return;
+            if (props.Type === 'Walkway') return;
 
             var coords = feature.geometry.coordinates.map(c => qgisToLeaflet(c[0], c[1]));
             var speed = props.Speed || 60;
 
-            // Add to routing graph
             routingGraph.push({
                 coords: coords,
                 speed: speed,
@@ -75,31 +109,92 @@ fetch('tiles_lookup.json')
                 type: props.Type
             });
 
-            // Draw the road
-            L.polyline(coords, {color:'blue', weight:2})
-             .bindPopup(`<b>${props.Name}</b><br>Type: ${props.Type}<br>Level: ${props.Level}<br>Path: ${props.Path}<br>Speed: ${speed}`)
-             .addTo(roadLayer);
+            // 5. Styling based on road type
+            var color = 'gray';
+            var weight = 2;
+
+            if (props.Type === 'Highway' || props.Type === 'Ramp') {
+                color = 'yellow';
+                weight = 6;
+            } else if (props.Type === 'Arterial' || props.Type === 'Road') {
+                color = 'white';
+                weight = 4;
+            } else if (props.Type === 'Street') {
+                color = 'gray';
+                weight = 2;
+            }
+
+            L.polyline(coords, {color: color, weight: weight})
+                .bindPopup(
+                    '<b>' + props.Name + '</b><br>' +
+                    'Type: ' + props.Type + '<br>' +
+                    'Level: ' + props.Level + '<br>' +
+                    'Path: ' + props.Path + '<br>' +
+                    'Speed: ' + speed
+                )
+                .addTo(roadLayer)
+                .bindTooltip(props.Name, {permanent: false, direction: 'top'});
         });
 
         console.log("Routing graph ready:", routingGraph);
     });
 
-    // === 5️⃣ Utility: Euclidean distance ===
+    // 6. Load POIs
+    var poiLayer = L.layerGroup().addTo(map);
+    var routeLayer = L.layerGroup().addTo(map);
+
+    fetch('properties.geojson')
+    .then(res => res.json())
+    .then(data => {
+        data.features.forEach(feature => {
+            var props = feature.properties;
+            var coord = qgisToLeaflet(feature.geometry.coordinates[0], feature.geometry.coordinates[1]);
+
+            var marker = L.circleMarker(coord, {
+                radius: 5,
+                color: 'red',
+                fillOpacity: 0.8
+            })
+            .bindPopup(
+                '<b>' + props.Name + '</b><br>' +
+                'Address: ' + props.Address + '<br>' +
+                'Type: ' + props.Type + '<br>' +
+                'Level: ' + props.Level + '<br>' +
+                'Street Number: ' + props['Street Number']
+            )
+            .addTo(poiLayer)
+            .bindTooltip(props.Name, {permanent:false, direction:'top'});
+
+            marker.on('click', function(){
+                var nearestRoad = findNearestRoad(coord);
+                if (nearestRoad) {
+                    routeLayer.clearLayers();
+                    L.polyline(nearestRoad.coords, {
+                        color: 'orange',
+                        weight: 4
+                    }).addTo(routeLayer);
+                }
+            });
+        });
+    });
+
+    // Utility: Euclidean distance
     function distance(p1, p2){
-        var dx = p1[1] - p2[1]; // x
-        var dy = p1[0] - p2[0]; // y
-        return Math.sqrt(dx*dx + dy*dy);
+        var dx = p1[1] - p2[1];
+        var dy = p1[0] - p2[0];
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
-    // === 6️⃣ Find nearest valid road ===
+    // Find nearest valid road segment
     function findNearestRoad(coord){
-        var candidates = routingGraph.filter(r => 
-            ['Street','Arterial','Road','Highway'].includes(r.type)
+        var candidates = routingGraph.filter(r =>
+            ['Street','Arterial','Road','Highway','Ramp'].includes(r.type)
         );
 
-        // Prioritize Street/Arterial/Road
-        var primary = candidates.filter(r => ['Street','Arterial','Road'].includes(r.type));
-        if(primary.length) candidates = primary;
+        var primary = candidates.filter(r =>
+            ['Street','Arterial','Road'].includes(r.type)
+        );
+        if (primary.length) candidates = primary;
 
         var nearest = null;
         var minDist = Infinity;
@@ -107,7 +202,7 @@ fetch('tiles_lookup.json')
         candidates.forEach(r => {
             r.coords.forEach(c => {
                 var d = distance(coord, c);
-                if(d < minDist){
+                if (d < minDist) {
                     minDist = d;
                     nearest = r;
                 }
@@ -117,19 +212,22 @@ fetch('tiles_lookup.json')
         return nearest;
     }
 
-    // === 7️⃣ Click-to-route ===
-    var routeLayer = L.layerGroup().addTo(map);
-
+    // Map click-to-route
     map.on('click', function(e){
         routeLayer.clearLayers();
         var clicked = [e.latlng.lat, e.latlng.lng];
         var nearestRoad = findNearestRoad(clicked);
 
-        if(nearestRoad){
-            L.polyline(nearestRoad.coords, {color:'orange', weight:4})
-             .addTo(routeLayer);
+        if (nearestRoad) {
+            L.polyline(nearestRoad.coords, {
+                color: 'orange',
+                weight: 4
+            }).addTo(routeLayer);
         }
     });
 
 });
 </script>
+
+</body>
+</html>
