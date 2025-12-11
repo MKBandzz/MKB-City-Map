@@ -36,12 +36,13 @@ window.onload = function() {
   // --------------------------
   const MIN_ZOOM = 0;
   const MAX_ZOOM = 3;
-  // CRITICAL FIX: Base path for GitHub Pages Project
+  
+  // *** CRITICAL FIX: Base path for GitHub Pages Project ***
   // This must match your repository name
   const REPO_NAME = '/mkbcity'; 
   
-  const MAP_WIDTH = 14208;   // your tif width
-  const MAP_HEIGHT = 14336;  // your tif height
+  const MAP_WIDTH = 14208;   
+  const MAP_HEIGHT = 14336;  
   const bounds = [[0,0],[MAP_HEIGHT, MAP_WIDTH]];
 
   // --------------------------
@@ -62,7 +63,7 @@ window.onload = function() {
   // --------------------------
   // Load tiles_lookup.json and install the Unmined-compatible tile layer
   // --------------------------
-  // CRITICAL FIX: Prepend REPO_NAME to the fetch path for tiles_lookup.json
+  // *** FIX APPLIED: Prepend REPO_NAME to the fetch path ***
   fetch(REPO_NAME + '/tiles_lookup.json')
   .then(r => {
     if(!r.ok) throw new Error('tiles_lookup.json fetch failed: ' + r.status);
@@ -73,7 +74,6 @@ window.onload = function() {
     // Helper: check whether tilesLookup indicates the region exists for zoom z
     function regionExists(z, rx, rz){
       if(!tilesLookup.hasOwnProperty(String(z)) && !tilesLookup.hasOwnProperty(z)) return false;
-      // tilesLookup keys might be numeric or strings; normalize to string
       const zKey = String(z);
       const zoomObj = tilesLookup[zKey] ?? tilesLookup[z];
       if(!zoomObj) return false;
@@ -83,38 +83,29 @@ window.onload = function() {
       return zoomObj[rxStr].indexOf(rzStr) !== -1;
     }
 
-    // UnminedTileLayer: computes tile path like:
-    // /mkbcity/tiles/zoom.{z}/{regionX}/{regionZ}/tile.{tileX}.{tileY}.png
     const UnminedTileLayer = L.TileLayer.extend({
       getTileUrl: function(coords) {
         const z = coords.z;
         const tileX = coords.x;
         const tileY = coords.y;
-
-        // Unmined groups tiles into region folders of size 10 (tile coords / 10)
         const regionX = Math.floor(tileX / 10);
         const regionZ = Math.floor(tileY / 10);
 
-        // check existence via tiles_lookup.json
         if(!regionExists(z, regionX, regionZ)) {
-          // no tile available
           return undefined;
         }
 
-        // Build URL - MODIFIED to include REPO_NAME
+        // Build URL - FIX APPLIED: includes REPO_NAME
         const url = REPO_NAME + '/tiles/zoom.' + z + '/' + regionX + '/' + regionZ + '/tile.' + tileX + '.' + tileY + '.png';
-        // console.log('Tile URL', url);
         return url;
       }
     });
 
-    // Instantiate and add to map
     new UnminedTileLayer({
       tileSize: 256,
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
       noWrap: true,
-      // bounds left in place; remove if you want requests outside bounds
       bounds: bounds
     }).addTo(map);
 
@@ -122,9 +113,9 @@ window.onload = function() {
     // Roads: load roads.geojson, build routingGraph and draw styled polylines
     // --------------------------
     const roadLayer = L.layerGroup().addTo(map);
-    const routingGraph = []; // { coords: [[lat,lng],...], speed, level, path, name, type }
+    const routingGraph = []; 
 
-    // CRITICAL FIX: Prepend REPO_NAME to the fetch path for roads.geojson
+    // *** FIX APPLIED: Prepend REPO_NAME to the fetch path ***
     fetch(REPO_NAME + '/roads.geojson')
     .then(r => {
       if(!r.ok) throw new Error('roads.geojson fetch failed: ' + r.status);
@@ -133,12 +124,10 @@ window.onload = function() {
     .then(geo => {
       geo.features.forEach(feature => {
         const props = feature.properties || {};
-        if(props.Type === 'Walkway') return; // skip
+        if(props.Type === 'Walkway') return; 
 
-        // geometry assumption: LineString -> array of [x,y] pairs
         const raw = feature.geometry && feature.geometry.coordinates;
         if(!Array.isArray(raw)) return;
-        // Convert to Leaflet coords (lat,lng) with Y inversion
         const latlngs = raw.map(c => qgisToLeaflet(c[0], c[1]));
 
         const speed = props.Speed || 60;
@@ -151,7 +140,6 @@ window.onload = function() {
           type: props.Type
         });
 
-        // style by Type
         let color = 'gray', weight = 2;
         if(props.Type === 'Highway' || props.Type === 'Ramp'){
           color = 'yellow'; weight = 6;
@@ -186,7 +174,6 @@ window.onload = function() {
     const routeLayer = L.layerGroup().addTo(map);
 
     function polygonCentroid(coords){
-      // coords expected: [ [ [x1,y1],[x2,y2],... ] , ... ] -> take first ring
       const ring = coords[0];
       if(!Array.isArray(ring) || ring.length === 0) return null;
       let sx = 0, sy = 0;
@@ -194,7 +181,7 @@ window.onload = function() {
       return [ sx / ring.length, sy / ring.length ];
     }
 
-    // CRITICAL FIX: Prepend REPO_NAME to the fetch path for properties.geojson
+    // *** FIX APPLIED: Prepend REPO_NAME to the fetch path ***
     fetch(REPO_NAME + '/properties.geojson')
     .then(r => {
       if(!r.ok) throw new Error('properties.geojson fetch failed: ' + r.status);
@@ -209,7 +196,7 @@ window.onload = function() {
         let centroidXY = null;
         if(geom.type === 'Polygon') {
           centroidXY = polygonCentroid(geom.coordinates);
-          // draw polygon itself
+          
           try {
             const latlngs = geom.coordinates[0].map(c => qgisToLeaflet(c[0], c[1]));
             L.polygon(latlngs, { color:'blue', weight:2, fillColor:'blue', fillOpacity:0.2 })
@@ -223,7 +210,6 @@ window.onload = function() {
         } else if(geom.type === 'Point') {
           centroidXY = geom.coordinates;
         } else {
-          // skip MultiPolygon, LineString, etc. unless desired
           return;
         }
 
@@ -231,7 +217,6 @@ window.onload = function() {
         const coord = qgisToLeaflet(centroidXY[0], centroidXY[1]);
         if(isNaN(coord[0]) || isNaN(coord[1])) return;
 
-        // marker style by Type could be added here
         const marker = L.circleMarker(coord, { radius:5, color:'red', fillOpacity:0.9 })
           .bindPopup('<div class="poi-popup"><b>' + (props.Name||'') + '</b><br/>' +
                      'Address: ' + (props.Address||'') + '<br/>' +
@@ -263,10 +248,8 @@ window.onload = function() {
     }
 
     function findNearestRoad(coord){
-      // guard
       if(!Array.isArray(routingGraph) || routingGraph.length === 0) return null;
 
-      // candidates = Street/Arterial/Road first, else include Highway/Ramp
       let candidates = routingGraph.filter(r => ['Street','Arterial','Road','Highway','Ramp'].includes(r.type));
       const primary = candidates.filter(r => ['Street','Arterial','Road'].includes(r.type));
       if(primary.length) candidates = primary;
