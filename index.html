@@ -32,13 +32,13 @@
 window.onload = function() {
 
   // --------------------------
-  // Configuration (from your unmined.map.properties)
+  // Configuration 
   // --------------------------
   const MIN_ZOOM = 0;
   const MAX_ZOOM = 3;
   
   // *** CRITICAL FIX: Base path for GitHub Pages Project ***
-  // This must match your repository name
+  // This MUST match your repository name
   const REPO_NAME = '/mkbcity'; 
   
   const MAP_WIDTH = 14208;   
@@ -63,7 +63,7 @@ window.onload = function() {
   // --------------------------
   // Load tiles_lookup.json and install the Unmined-compatible tile layer
   // --------------------------
-  // *** FIX APPLIED: Prepend REPO_NAME to the fetch path ***
+  // FIX: Prepend REPO_NAME to the fetch path for robustness
   fetch(REPO_NAME + '/tiles_lookup.json')
   .then(r => {
     if(!r.ok) throw new Error('tiles_lookup.json fetch failed: ' + r.status);
@@ -83,24 +83,31 @@ window.onload = function() {
       return zoomObj[rxStr].indexOf(rzStr) !== -1;
     }
 
+    // UnminedTileLayer: computes tile path like:
+    // /mkbcity/tiles/zoom.{z}/{regionX}/{regionZ}/tile.{tileX}.{tileY}.png
     const UnminedTileLayer = L.TileLayer.extend({
       getTileUrl: function(coords) {
         const z = coords.z;
         const tileX = coords.x;
         const tileY = coords.y;
+
+        // Unmined groups tiles into region folders of size 10 (tile coords / 10)
         const regionX = Math.floor(tileX / 10);
         const regionZ = Math.floor(tileY / 10);
 
+        // check existence via tiles_lookup.json
         if(!regionExists(z, regionX, regionZ)) {
-          return undefined;
+          // Returning undefined tells Leaflet to skip the request
+          return undefined; 
         }
 
-        // Build URL - FIX APPLIED: includes REPO_NAME
+        // Build URL - *** FIX APPLIED: includes REPO_NAME ***
         const url = REPO_NAME + '/tiles/zoom.' + z + '/' + regionX + '/' + regionZ + '/tile.' + tileX + '.' + tileY + '.png';
         return url;
       }
     });
 
+    // Instantiate and add to map
     new UnminedTileLayer({
       tileSize: 256,
       minZoom: MIN_ZOOM,
@@ -115,7 +122,7 @@ window.onload = function() {
     const roadLayer = L.layerGroup().addTo(map);
     const routingGraph = []; 
 
-    // *** FIX APPLIED: Prepend REPO_NAME to the fetch path ***
+    // FIX: Prepend REPO_NAME to the fetch path
     fetch(REPO_NAME + '/roads.geojson')
     .then(r => {
       if(!r.ok) throw new Error('roads.geojson fetch failed: ' + r.status);
@@ -181,7 +188,7 @@ window.onload = function() {
       return [ sx / ring.length, sy / ring.length ];
     }
 
-    // *** FIX APPLIED: Prepend REPO_NAME to the fetch path ***
+    // FIX: Prepend REPO_NAME to the fetch path
     fetch(REPO_NAME + '/properties.geojson')
     .then(r => {
       if(!r.ok) throw new Error('properties.geojson fetch failed: ' + r.status);
