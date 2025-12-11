@@ -10,7 +10,7 @@
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
 />
 
-<!-- Leaflet JS (defer ensures it loads before our code) -->
+<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
 <style>
@@ -59,30 +59,33 @@ window.onload = function() {
     .then(response => response.json())
     .then(tilesLookup => {
 
-        function tileUrl(coords) {
-            var z = coords.z;
-            var xIndex = coords.x;
-            var yIndex = coords.y;
+        var tileLayer = L.TileLayer.extend({
+            getTileUrl: function(coords) {
+                var z = coords.z;
+                var xIndex = coords.x;
+                var yIndex = coords.y;
 
-            var xFolders = Object.keys(tilesLookup[z]);
-            if(xIndex < 0 || xIndex >= xFolders.length) return '';
-            var xFolder = xFolders[xIndex];
+                if(!tilesLookup[z]) return '';
 
-            var yFolders = tilesLookup[z][xFolder];
-            if(!yFolders) return '';
-            if(yIndex < 0 || yIndex >= yFolders.length) return '';
-            var yFolder = yFolders[yIndex];
+                var xFolders = Object.keys(tilesLookup[z]);
+                if(xIndex < 0 || xIndex >= xFolders.length) return '';
+                var xFolder = xFolders[xIndex];
 
-            return 'tiles/zoom.'+z+'/'+xFolder+'/'+yFolder+'/tile.0.0.png';
-        }
+                var yFolders = tilesLookup[z][xFolder];
+                if(!yFolders) return '';
+                if(yIndex < 0 || yIndex >= yFolders.length) return '';
+                var yFolder = yFolders[yIndex];
 
-        L.tileLayer('', {
+                return 'tiles/zoom.'+z+'/'+xFolder+'/'+yFolder+'/tile.0.0.png';
+            }
+        });
+
+        new tileLayer({
             tileSize: 256,
             maxZoom: 3,
             minZoom: 0,
             noWrap: true,
-            bounds: bounds,
-            getTileUrl: tileUrl
+            bounds: bounds
         }).addTo(map);
 
         // 4. Load roads and build routing graph
