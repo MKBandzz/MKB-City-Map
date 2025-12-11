@@ -97,11 +97,11 @@ window.onload = function() {
 
         // check existence via tiles_lookup.json
         if(!regionExists(z, regionX, regionZ)) {
-          // Returning undefined tells Leaflet to skip the request
-          return undefined; 
+          // *** THE FIX: return null or an empty string, NOT undefined ***
+          return null; 
         }
 
-        // Build URL - *** FIX APPLIED: includes REPO_NAME ***
+        // Build URL - FIX APPLIED: includes REPO_NAME
         const url = REPO_NAME + '/tiles/zoom.' + z + '/' + regionX + '/' + regionZ + '/tile.' + tileX + '.' + tileY + '.png';
         return url;
       }
