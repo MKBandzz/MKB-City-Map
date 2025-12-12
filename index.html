@@ -83,7 +83,6 @@ window.onload = function() {
       return zoomObj[rxStr].indexOf(rzStr) !== -1;
     }
 
-// ...
     // UnminedTileLayer: computes tile path like:
     // /mkbcity/tiles/zoom.{z}/{regionX}/{regionZ}/tile.{tileX}.{tileY}.png
     const UnminedTileLayer = L.TileLayer.extend({
@@ -98,17 +97,9 @@ window.onload = function() {
 
         // check existence via tiles_lookup.json
         if(!regionExists(z, regionX, regionZ)) {
-          // *** THE FIX: return an empty string to signal Leaflet to skip the request ***
+          // *** FIX: Return empty string to prevent /undefined or /null 404 errors ***
           return ''; 
         }
-
-        // Build URL - FIX APPLIED: includes REPO_NAME
-        const url = REPO_NAME + '/tiles/zoom.' + z + '/' + regionX + '/' + regionZ + '/tile.' + tileX + '.' + tileY + '.png';
-        return url;
-      }
-    });
-
-// ...
 
         // Build URL - FIX APPLIED: includes REPO_NAME
         const url = REPO_NAME + '/tiles/zoom.' + z + '/' + regionX + '/' + regionZ + '/tile.' + tileX + '.' + tileY + '.png';
